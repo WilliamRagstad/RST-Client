@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>RST - Realtime Sass Transpiler</title>
+
+    <script src="Transpiler/main.js"></script>
+</head>
+<body>
+    <header>
+        <nav>
+            <h1 class="Title"><b>R</b>ealtime <b>S</b>ass <b>T</b>ranspiler</h1>
+        </nav>
+    </header>
+    <main>
+        <section id="info">
+            <h2>Welcome to the realtime sass transpiler!</h2>
+            <p>
+                Lorem ipsum dolor sit, amet consectetur adipisicing elit.
+                Ipsam inventore corporis aperiam suscipit mollitia vel.
+                Qui dolor aspernatur dolorum.
+                Iure quae nam nihil esse aliquid quia culpa laboriosam excepturi impedit!</p>
+        </section>
+    </main>
+</body>
+
+<style>
+
+/*=============================================
+                   Scss code            
+=============================================*/
+
+@import 'partial.css';
+
+$font-stack:    Helvetica, sans-serif;
+// hello world
+$primary-color: #333;
+
+body {
+  font: 100% $font-stack;
+  color: $primary-color;
+  p {
+      color: "red";
+  }
+  li { display: inline-block; }
+}
+// --- HEADER ---
+header { font: 100% Helvetica, sans-serif; background-color: #efefef; }
+
+</style>
+
+</html>
