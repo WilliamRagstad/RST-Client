@@ -9,30 +9,29 @@
 		<a href="#support">Support me!</a>&nbsp;&nbsp;&nbsp;
 	</p>
 
-</div>
-<br>
+
 
 <div align="center">
 	<b>Follow <a href="https://twitter.com/williamragstad" target="_blank">me on Twitter</a> for updates and new additions!</b>
 </div>	
-<br>
-<br>
-
 
 <h2 id="about">About</h2>
+Welcome to the RST Project!
+This is a transpiler for Sass written completely in JavaScript.
 
-Welcome to the RST Project.
-This is a transpiler for Sass
-written completely in JavaScript.
+
+
+> ## Notice!
+>
+> This transpiler only have support for the SCSS syntax of Sass. Read more about SCSS [here](https://sass-lang.com/documentation/syntax#scss).
 
 <h3>Client-sided</h3>
 | Pros | Cons |
 | ---- | ---- |
-| No downloads! | Another `<script>` to fetch on load. |
-| Cool! | Yeah... |
+| No extra software! | Another `<script>` to fetch when browser load... |
+| It's cool! | Yeah... |
 
 <h2 id="why">Why transpile on client-side?</h2>
-
 Now you might be wondering; "But why would I ever want to transpile my Sass real-time?"
 
 Well, good question… Think about it this way: Now you don't need to download any extra software, pre-processors or such!
@@ -49,12 +48,11 @@ Go into your `<head>` tag and paste the following code:
 
 Now you're done! Yeah, I know!
 
-Create a new `<style>` tag and start write Sass!
+Create a new `<style>` tag and start write some Sass!
 
 Then you just load up your website and look at your lovely new style!
 
 <h2 id="support">Support me!</h2>
-
 If you're interested in more
 projects like this, please consider
 following me here:
