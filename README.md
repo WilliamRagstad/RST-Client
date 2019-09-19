@@ -1,7 +1,7 @@
 <div align="center">
 	<img width="500" src="https://miro.medium.com/max/1200/1*Fk9lVjzWan0OgYa828emhw.png" alt="Sass">
 	<h1>RST <em>(Client-side)</em></h1>
-	<p>A Real-time Sass Transpiler that runs on the client side of the browser!</p>
+	<p>Real-time Sass Transpiler, runs on the client side in the browser!</p>
 	<p align="center">
 		<a href="#about">About</a>&nbsp;&nbsp;&nbsp;
 		<a href="#why">Why client-side?</a>&nbsp;&nbsp;&nbsp;
@@ -28,7 +28,6 @@ This is a transpiler for Sass written completely in JavaScript.
 > This transpiler only have support for the SCSS syntax of Sass. Read more about SCSS [here](https://sass-lang.com/documentation/syntax#scss).
 
 <h3>Client-sided</h3>
-
 | Pros 🤩 | Cons 😔 |
 | :--- | ---- |
 | No extra software to download! | Another script to fetch when browser load... |
@@ -51,7 +50,7 @@ Alright, now when I've convinced you to use this, we can start talk about how to
 
 2. Now **you're done**! Yeah, I know!
 
-Create a new `<style>` tag and start write some Sass! Then you just load up your website and look at your lovely new style!
+Create a new `<style>` tag and start write some Sass! 
 
 <h2 id="support">Support me!</h2>
 If you're interested in more projects like this, please consider following me on my social medias:
