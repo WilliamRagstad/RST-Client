@@ -21,7 +21,7 @@
 Welcome to the RST Project!
 This is a transpiler for Sass written completely in JavaScript.
 
-<br><br>
+<br>
 
 > ## Notice!
 >
@@ -29,14 +29,12 @@ This is a transpiler for Sass written completely in JavaScript.
 
 <h3>Client-sided</h3>
 
-
 | Pros 🤩 | Cons 😔 |
 | :--- | ---- |
 | No extra software to download! | Another script to fetch when browser load... |
 | It's cool! | It is... |
 
 <h2 id="why">Why client-side?</h2>
-
 Now you might be wondering; "But why would I ever want to transpile my Sass real-time?"
 
 Well, good question… Think about it this way: Now you don't need to download any extra software, pre-processors or such!
