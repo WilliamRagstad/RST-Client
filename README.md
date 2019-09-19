@@ -21,7 +21,7 @@
 Welcome to the RST Project!
 This is a transpiler for Sass written completely in JavaScript.
 
-<br>
+<br><br>
 
 > ## Notice!
 >
