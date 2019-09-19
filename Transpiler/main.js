@@ -9,7 +9,7 @@
  *    88     `8b   Y8a     a8P      88
  *    88      `8b   "Y88888P"       88
  *
- *    Real-time Sass Transpiler - v Alpha
+ *    Real-time Sass Transpiler - v.Alpha
  *    -----------------------------------
  * 
  *        Welcome to the RST Project.
@@ -27,12 +27,12 @@
 window.addEventListener('DOMContentLoaded', () => {
     const STYLES = document.getElementsByTagName("style");
     for (let s = 0; s < STYLES.length; s++) {
-        const SOURCE = STYLES[s].textContent + T_NEWLINE;
-        const TOKENS = lexer(SOURCE);
-        console.table(TOKENS);
-        const AST = parser(TOKENS);
-        console.log(AST);
-        transpiler(SOURCE, AST);
+        const SOURCE = STYLES[s].textContent + T_NEWLINE;           // SINGLE INPUT
+        const TOKENS = lex(SOURCE);                                 // LEXER
+        if (RST_SETTINGS.debugging.debug) console.table(TOKENS);
+        const AST = parse(TOKENS);                                  // PARSER
+        if (RST_SETTINGS.debugging.debug)console.log(AST);
+        STYLES[s].textContent = transpile(AST);                     // TRANSPILER
     }
 });
 
@@ -53,7 +53,7 @@ window.addEventListener('DOMContentLoaded', () => {
  
 */
 
-function lexer(SOURCE) {
+function lex(SOURCE) {
     // Tokenize the SOURCE
     const tokens = []; // Results
     let ct = "";     // Current Token
@@ -121,7 +121,7 @@ function lexer(SOURCE) {
  
 */
 
-function parser(TOKENS) {
+function parse(TOKENS) {
     // Create an AST using the tokens
     const ast = [];
     let pattern = [];
@@ -188,8 +188,13 @@ function parser(TOKENS) {
  
 */
 
-function transpiler(SOURCE, AST) {
-    // We transpile the AST to the SOURCE
+function transpile(AST) {
+    // We transpile and return the AST
+    let CSS = "";
+
+    
+
+    return CSS;
 }
 
 
@@ -286,5 +291,8 @@ let RST_SETTINGS = {
     output: {
         minify: true,           // Make the output compact
         keepVariables: false    // Convert Scss variables to CSS variables: $variable => --variable
+    },
+    debugging: {
+        debug: true
     }
 }
