@@ -1,6 +1,6 @@
 <div align="center">
 	<img width="500" src="https://miro.medium.com/max/1200/1*Fk9lVjzWan0OgYa828emhw.png" alt="Sass">
-	<h1>RST (Client-side)</h1>
+	<h1>RST <em>(Client-side)</em></h1>
 	<p>A Real-time Sass Transpiler that runs on the client side of the browser!</p>
 	<p align="center">
 		<a href="#about">About</a>&nbsp;&nbsp;&nbsp;
