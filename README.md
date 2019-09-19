@@ -8,13 +8,14 @@
 		<a href="#install"><b>Installation</b></a>&nbsp;&nbsp;&nbsp;
 		<a href="#support">Support me!</a>&nbsp;&nbsp;&nbsp;
 	</p>
-
+</div>
 
 
 
 <div align="center">
 	<b>Follow <a href="https://twitter.com/williamragstad" target="_blank">me on Twitter</a> for updates and new additions!</b>
-</div>	
+</div>
+
 
 <h2 id="about">About</h2>
 Welcome to the RST Project!
