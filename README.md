@@ -1,7 +1,7 @@
 <div align="center">
 	<img width="500" src="https://miro.medium.com/max/1200/1*Fk9lVjzWan0OgYa828emhw.png" alt="Sass">
 	<h1>RST <em>(Client-side)</em></h1>
-	<p>Real-time Sass Transpiler, runs on the client side in the browser!</p>
+	<p>Real-time Sass Transpiler, runs on the client-side in the browser!</p>
 	<p align="center">
 		<a href="#about">About</a>&nbsp;&nbsp;&nbsp;
 		<a href="#why">Why client-side?</a>&nbsp;&nbsp;&nbsp;
@@ -21,7 +21,7 @@
 Welcome to the RST Project!
 This is a transpiler for Sass written completely in JavaScript.
 
-<br><br>
+<br>
 
 > ## Notice!
 >
