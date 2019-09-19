@@ -28,6 +28,8 @@ This is a transpiler for Sass written completely in JavaScript.
 > This transpiler only have support for the SCSS syntax of Sass. Read more about SCSS [here](https://sass-lang.com/documentation/syntax#scss).
 
 <h3>Client-sided</h3>
+
+
 | Pros 🤩 | Cons 😔 |
 | :--- | ---- |
 | No extra software to download! | Another script to fetch when browser load... |
