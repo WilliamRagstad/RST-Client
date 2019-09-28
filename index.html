@@ -39,15 +39,16 @@ $font-stack:    Helvetica, sans-serif;
 $primary-color: #333;
 
 body {
-  font: 100% $font-stack;
+  font: 100%    $font-stack;
   color: $primary-color;
+  $my-new-var: "cool!";
   p {
       color: "red";
   }
-  li { display: inline-block; }
+  li { display: inline-block;}
 }
-// --- HEADER ---
-header { font: 100% Helvetica, sans-serif; background-color: #efefef; }
+// --- HEADER --- 
+header { font: 100% $font-stack; background-color: #efefef; }
 
 </style>
 

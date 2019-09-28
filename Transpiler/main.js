@@ -31,7 +31,8 @@ window.addEventListener('DOMContentLoaded', () => {
         const TOKENS = lex(SOURCE);                                 // LEXER
         if (RST_SETTINGS.debugging.debug) console.table(TOKENS);
         const AST = parse(TOKENS);                                  // PARSER
-        if (RST_SETTINGS.debugging.debug)console.log(AST);
+        if (RST_SETTINGS.debugging.debug) console.log(AST);
+        VARIABLES = [];                                             // CLEAR VARIABLE DICTIONARY/SYMBOL TABLE
         STYLES[s].textContent = transpile(AST);                     // TRANSPILER
     }
 });
@@ -57,45 +58,56 @@ function lex(SOURCE) {
     // Tokenize the SOURCE
     const tokens = []; // Results
     let ct = "";     // Current Token
+    let line = 1;
 
     let isString = false;
     let isLineComment = false;
     let isBlockComment = false;
     let isVariable = false;
     let isRule = false;
+    let isRuleValue = false;
 
     for (let i = 0; i < SOURCE.length; i++) {
         let cc = SOURCE[i]; // Current Character
 
         if (ct == "//") isLineComment = true;
-        if (isLineComment && cc == "\n") { isLineComment = false; tokens.push(Token(t_comment, ct)); ct = ""; continue; }
+        if (isLineComment && cc == "\n") { isLineComment = false; tokens.push(Token(t_comment, ct, line)); ct = ""; line++; continue; }
         if (ct == "/*") isBlockComment = true;
-        if (isBlockComment && ct.endsWith("*/")) { isBlockComment = false; tokens.push(Token(t_comment, ct)); ct = ""; continue; }
+        if (isBlockComment && ct.endsWith("*/")) { isBlockComment = false; tokens.push(Token(t_comment, ct, line)); ct = ""; continue; }
         
         if (!isString && !isLineComment && !isBlockComment) {
             if (ct == " " || ct + cc == " ") { ct = ""; continue; }
-            if (ct == T_NEWLINE) { ct = ""; }
+            if (ct == T_NEWLINE) { ct = ""; line++; }
+            if (cc == " ") {
+                if (isRule && !isRuleValue) {
+                    isRuleValue = true;
+                    tokens.push(Token(t_rule, ct, line));
+                    ct = "";
+                    continue;
+                }
+            }
 
-            if (ct == "$") isVariable = true;
-            if (ct == "@") isRule = true;
+            if (ct == "$") { isVariable = true; }
+            if (ct == "@") { isRule = true; isRuleValue  = false }
 
             if (cc == ":") {
-                if (isVariable) tokens.push(Token(t_variable, ct));
-                else tokens.push(Token(t_property, ct));
+                if (isVariable) tokens.push(Token(t_variable, ct, line));
+                else tokens.push(Token(t_property, ct, line));
                 isVariable = false;
                 ct = "";
                 continue;
             }
 
-            if (cc == "{") { tokens.push(Token(t_declaration_start, ct.trim())); ct = ""; continue; }
-            if (ct == "}") { tokens.push(Token(t_declaration_end,   "")); ct = ""; continue; }
+            if (cc == "{") { tokens.push(Token(t_declaration, ct.trim(), line)); tokens.push(Token(t_separator, cc, line)); ct = ""; continue; }
+            if (cc == "}") { tokens.push(Token(t_separator, cc, line)); ct = ""; continue; }
 
             if (cc == ";") {
-                if (isRule) tokens.push(Token(t_rule, ct));
-                else tokens.push(Token(t_property_value, ct));
+                if (isRule && isRuleValue) { tokens.push(Token(t_rule_value, ct, line)); }
+                else tokens.push(Token(t_property_value, ct, line));
                 isVariable = false;
                 isRule = false;
                 ct = "";
+                tokens.push(Token(t_separator, cc, line)); // Add the ";" to the tokens list
                 continue;
             }
         }
@@ -124,52 +136,92 @@ function lex(SOURCE) {
 function parse(TOKENS) {
     // Create an AST using the tokens
     const ast = [];
-    let pattern = [];
+    let tIndex = 0;
+    function nextToken() {
+        let token = TOKENS[tIndex];
+        tIndex++;
+        return token;
+    }
 
-    for (let i = 0; i < TOKENS.length; i++) {
-        const ct = TOKENS[i];
-        pattern.push(ct);
+    let cToken;
+    while(cToken = nextToken()) {
+        if (cToken.type == t_comment) { ast.push(Pattern(p_comment, cToken.value)); continue; }
 
-        if (pattern.length >= 1) {
-            // DECLARATION
-            if (pattern[0].type == declaration_start &&
-                pattern[pattern.length - 1].type == declaration_end) {
-                let d = Pattern(declaration, pattern[0].value, null);
-                d.children = parser(pattern.slice(1, pattern.length-2));
-                ast.push(d);
-                pattern = [];
-                continue;
-            }
-            // COMMENT
-            if (pattern[0].type == comment) {
-                pattern = [];
-                continue;
-            }
-            // RULE
-            if (pattern[0].type == rule) {
-                pattern.push(Pattern(rule, pattern[0].value));
-                pattern = [];
-                continue;
-            }
-            if (pattern.length >= 2) {
-                //  PROPERTY DECLARATION
-                if (pattern[0].type == property && pattern[1].type == property_value) {
-                    pattern.push(Pattern(property, null, pattern));
-                    pattern = [];
+        if (cToken.type == t_rule) {
+            let ruleIdentifier = cToken.value;
+            let ruleValue = nextToken();
+            if (ruleValue.type == t_rule_value) {
+                let separator = nextToken();
+                if (separator.type == t_separator && separator.value == ";") {
+                    ast.push(Pattern(p_rule, ruleIdentifier, ruleValue.value));
                     continue;
                 }
-                // VARIABLE DECLARATION
-                if (pattern[0].type == variable && pattern[1].type == property_value) {
-                    pattern.push(Pattern(variable, null, pattern));
-                    pattern = [];
-                    continue;
+                else {
+                    unexpectedToken(separator);
                 }
+            }
+            else {
+                unexpectedToken(ruleValue);
             }
         }
 
-        console.log("Unexpected token: ", pattern);
+        if (cToken.type == t_variable) {
+            let variableValue = nextToken();
+            if (variableValue.type == t_property_value) {
+                let separator = nextToken();
+                if (separator.type == t_separator && separator.value == ";") {
+                    ast.push(Pattern(p_variable, cToken.value, variableValue.value));
+                    continue;
+                }
+                else {
+                    unexpectedToken(separator);
+                }
+            }
+            else {
+                InvalidVariableDeclaration(variableValue);
+            }
+        }
 
+        if (cToken.type == t_property) {
+            let propertyValue = nextToken();
+            if (propertyValue.type == t_property_value) {
+                let separator = nextToken();
+                if (separator.type == t_separator && separator.value == ";") {
+                    ast.push(Pattern(p_property, cToken.value, propertyValue.value));
+                    continue;
+                }
+                else {
+                    unexpectedToken(separator);
+                }
+            }
+            else {
+                unexpectedToken(variableValue);
+            }
+        }
+
+        if (cToken.type == t_declaration) {
+            let scope = 0;
+            let separatorOpen = nextToken();
+            let declarationTokens = [];
+            let cDeclarationToken;
+            while (cDeclarationToken = nextToken()) {
+                if (cDeclarationToken.type == t_separator) {
+                    if (cDeclarationToken.value == "{") scope++;
+                    if (cDeclarationToken.value == "}") scope--;
+                }
+                if (scope == -1) break;
+                declarationTokens.push(cDeclarationToken);
+            }
+            if (scope != -1) { InvalidStatementDeclaration(cToken); continue; }
+            ast.push(Pattern(p_declaration, cToken.value, parse(declarationTokens)));
+            continue;
+        }
+
+        unexpectedToken(cToken);    // TODO: Change all unexpectedToken() to throw a more specific error message except this one.
     }
+
+
+
     return ast;
 }
 
@@ -188,18 +240,210 @@ function parse(TOKENS) {
  
 */
 
-function transpile(AST) {
+
+let VARIABLES; // This will not be used if RST_SETTINGS.output.keepVariables is true.
+
+function transpile(AST, indent) {
     // We transpile and return the AST
     let CSS = "";
 
+    if (indent == undefined || indent == null) indent = 0;
+    function addIndentions(_indent) {
+        if (_indent == undefined || _indent == null) _indent = indent;
+        if (!RST_SETTINGS.output.minify) {
+            for (let j = 0; j < _indent; j++) CSS += "    ";
+        }
+    }
+
+    // TODO: For each property value found, evaluate them as expressions...
     
+    for (let i = 0; i < AST.length; i++) {
+        const NODE = AST[i];
+
+        if (NODE.type == p_comment) {
+            if (RST_SETTINGS.output.keepComments) {
+                let inlineComment = NODE.values[0];
+                if (NODE.values[0].startsWith("//")) {
+                    inlineComment = "/*" + NODE.values[0].replace("//", "") + "*/";
+                }
+                if (RST_SETTINGS.output.minify) {
+                    CSS += inlineComment.replace(/\n/g, " "); // TODO: Trim comments more (to make them more compact)
+                }
+                else {
+                    addIndentions();
+                    CSS += inlineComment + "\n";
+                }
+            }
+            continue;
+        }
+
+        if (NODE.type == p_rule) {
+            addIndentions();
+            CSS += NODE.values[0] + " " + NODE.values[1] + ";";
+            if (!RST_SETTINGS.output.minify) CSS += "\n";
+            continue;
+        }
+
+        if (NODE.type == p_variable) {
+            let variableName = NODE.values[0].split("$")[1];
+            let propertyValue = NODE.values[1];
+
+            if (RST_SETTINGS.output.keepVariables) {
+                addIndentions();
+                CSS += "--" + variableName + ":"
+                if (!RST_SETTINGS.output.minify) CSS += " ";
+                CSS += evaluatePropertyValue(propertyValue) + ";";
+                if (!RST_SETTINGS.output.minify) CSS += "\n";
+            }
+            else {
+                //* Keep track of variables
+                // Check if variable already exists, overwrite it in that case
+                // Otherwise, add it to the dictionary
+                var variableFound = false;
+                for (var v = 0; v < VARIABLES.length; v++) {
+                    if (VARIABLES[v].key == variableName) {
+                        VARIABLES[v].value = propertyValue;
+                        variableFound = true;
+                        break;
+                    }
+                }
+                if (!variableFound) VARIABLES.push(Variable(variableName, propertyValue));
+            }
+            continue;
+        }
+
+        if (NODE.type == p_property) {
+            addIndentions();
+            CSS += NODE.values[0] + ":"
+            if (!RST_SETTINGS.output.minify) CSS += " ";
+            CSS += evaluatePropertyValue(NODE.values[1]) + ";";
+            if (!RST_SETTINGS.output.minify) CSS += "\n";
+            continue;
+        }
+        
+        /* 
+        // TODO: Make these declarations not recursive
+        if (NODE.type == p_declaration) {
+            addIndentions();
+            CSS += NODE.values[0];
+            if (!RST_SETTINGS.output.minify) CSS += " ";
+            CSS += "{";
+            if (!RST_SETTINGS.output.minify) CSS += "\n";
+
+            CSS += transpile(NODE.values[1], indent+1);
+
+            addIndentions(indent);
+            CSS += "}";
+            if (!RST_SETTINGS.output.minify) CSS += "\n";
+            continue;
+        }
+        */
+
+        if (NODE.type == p_declaration) {   // First transpile itself to css, then transpile all child declarations afterwards
+            addIndentions();
+            CSS += NODE.values[0];
+            if (!RST_SETTINGS.output.minify) CSS += " ";
+            CSS += "{";
+            if (!RST_SETTINGS.output.minify) CSS += "\n";
+
+            CSS += transpile(NODE.values[1], indent + 1);
+
+            addIndentions(indent);
+            CSS += "}";
+            if (!RST_SETTINGS.output.minify) CSS += "\n";
+            continue;
+        }
+
+        unexpectedPattern(NODE);
+    }
 
     return CSS;
 }
 
 
 
+/*
+ 
+ 8888b.  888888 888888 88 88b 88 888888     888888 Yb    dP    db    88     88   88    db    888888  dP"Yb  88""Yb 
+  8I  Yb 88__   88__   88 88Yb88 88__       88__    Yb  dP    dPYb   88     88   88   dPYb     88   dP   Yb 88__dP 
+  8I  dY 88""   88""   88 88 Y88 88""       88""     YbdP    dP__Yb  88  .o Y8   8P  dP__Yb    88   Yb   dP 88"Yb  
+ 8888Y"  888888 88     88 88  Y8 888888     888888    YP    dP""""Yb 88ood8 `YbodP' dP""""Yb   88    YbodP  88  Yb 
+ =================================================================================================================
+ 
+*/
 
+function evaluatePropertyValue(expr) {
+    expr = evaluateVariables(expr);
+    expr = trimExpression(expr);
+    return expr;
+}
+
+function evaluateVariables(expr) {
+    if (!expr.endsWith(";")) expr += ";";   // End of line
+    let result = "";
+    let variableName = "";
+    let isVariable = false;
+
+    for (let i = 0; i < expr.length; i++) {
+        const cc = expr[i];
+
+        if (cc == "$") { isVariable = true; continue; }
+        if ((isVariable && cc.match(/[^A-z-]/g) != null)) {
+            isVariable = false;
+            if (RST_SETTINGS.output.keepVariables) {
+                result += "var(--" + variableName + ")";
+            }
+            else {
+                let foundVar = false;
+                for (let j = 0; j < VARIABLES.length; j++) {
+                    const variable = VARIABLES[j];
+                    if (variable.key == variableName) {
+                        result += variable.value;
+                        foundVar = true;
+                        break;
+                    }
+                }
+                if (!foundVar) {
+                    VariableNotFound(variableName);
+                }
+            }
+            variableName = "";
+            continue;
+        }
+        else if (isVariable) {
+            variableName += cc;
+        }
+        else if (cc != ";") {
+            result += cc;
+        }
+        else {
+            break;
+        }
+    }
+
+    return result;
+}
+
+function trimExpression(expr) {
+    let result = "";
+    for (let i = 0; i < expr.length; i++) {
+        const cc = expr[i];
+        if (cc == ";") break;
+        if (RST_SETTINGS.output.shortenPropertyValues && result[result.length - 1] == " " && cc == " ") continue;
+        result += cc;
+    }
+    return result;
+}
+
+
+function evaluateRule(expr) {
+    if (!expr.endsWith(";")) expr += ";";
+    expr = evaluateVariables(expr);
+
+    /* TODO: If rule is @import, test if file to import is .scss, and if so:
+    * fetch("https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css").then(r => r.text()).then(r => console.log(r))
+    */
+}
 
 
 /*
@@ -218,16 +462,16 @@ const t_keyword = "T_KEYWORD";
 const t_operator = "T_OPERATOR";
 const t_literal = "T_LITERAL";
 const t_comment = "T_COMMENT";
+const t_separator = "T_SEPARATOR";
 
 // SctS Spesific
 const t_selector = "T_SELECTOR";
 const t_declaration = "T_DECLARATION";
-const t_declaration_start = "T_DECLARATION_START";
-const t_declaration_end = "T_DECLARATION_END";
 const t_property = "T_PROPERTY";
 const t_property_value = "T_PROPERTY_VALUE";
 const t_variable = "T_VARIABLE";
 const t_rule = "T_RULE";
+const t_rule_value = "T_RULE_VALUE";
 
 const T_NEWLINE = "\n";
 
@@ -247,10 +491,11 @@ const T_NEWLINE = "\n";
 */
 
 // Pattern Definitions
-const p_variable_decl = "P_VARIABLE_DECL";
-
-
-
+const p_variable = "P_VARIABLE";
+const p_declaration = "P_DECLARATION";
+const p_rule = "P_RULE";
+const p_property = "P_PROPERTY";
+const p_comment = "P_COMMENT";
 
 
 
@@ -265,12 +510,52 @@ const p_variable_decl = "P_VARIABLE_DECL";
 */
 
 // Factories
-function Token(type, value) { return {type: type, value: value} }
-function Pattern(type, value,...children) { return {type: type, value: value, children: [...children]} }
+function Token(type, value, line) { return {type: type, value: value, line: line} }
+function Pattern(type, ...values) { return {type: type, values: [...values] } }
+function Variable(key, value) { return {key: key, value: value} }
 
 
 
+/*
+ 
+ 888888 88""Yb 88""Yb  dP"Yb  88""Yb     888888 88  88 88""Yb  dP"Yb  Yb        dP 88 88b 88  dP""b8 
+ 88__   88__dP 88__dP dP   Yb 88__dP       88   88  88 88__dP dP   Yb  Yb  db  dP  88 88Yb88 dP   `" 
+ 88""   88"Yb  88"Yb  Yb   dP 88"Yb        88   888888 88"Yb  Yb   dP   YbdPYbdP   88 88 Y88 Yb  "88 
+ 888888 88  Yb 88  Yb  YbodP  88  Yb       88   88  88 88  Yb  YbodP     YP  YP    88 88  Y8  YboodP 
+ ====================================================================================================
+ 
+*/
 
+function generalError(type, message, line) {
+    if (RST_SETTINGS.debugging.shortErrorMsgs) message = message.replace(/\n/g, "\\n");
+    if (line != undefined || line != null) message = message + " (line " + line + ")";
+    console.error("ERROR (" + type + ") " + message);
+}
+
+function unexpectedToken(token) {
+    generalError("Unexpected token: " + token.type, "`" + token.value + "` was unexpected", token.line);
+}
+
+function InvalidVariableDeclaration(token) {
+    generalError("Invalid Variable Declaration", "`" + token.value + "` is not a valid variable declaration", token.line);
+}
+
+function InvalidStatementDeclaration(token) {
+    generalError("Invalid Statement Declaration", "`" + token.value + "` is not a valid statement", token.line);
+}
+
+
+
+// TODO: Add line specification
+function unexpectedPattern(pattern) {
+    generalError("Unexpected pattern: " + pattern.type, "`" + pattern.values + "` was unexpected");
+}
+
+
+// TODO: Add line specification
+function VariableNotFound(variableName) {
+    generalError("Invalid Variable", "`" + variableName + "` was not found");
+}
 
 
 /*
@@ -286,13 +571,18 @@ function Pattern(type, value,...children) { return {type: type, value: value, ch
 // Default settings
 let RST_SETTINGS = {
     rules: {
-        import: "css"           // All imports are to CSS files
+        importSass: false         // Send another request and transpile all imports to other .scss files,
+                                  // and create a new style tag with it's corresponding css.
+        
     },
     output: {
-        minify: true,           // Make the output compact
-        keepVariables: false    // Convert Scss variables to CSS variables: $variable => --variable
+        minify: false,                  // Make the output compact
+        shortenPropertyValues: true,    // Make double spaces to single spaces in property values
+        keepVariables: false,           // Convert Scss variables to CSS variables: $variable => --variable
+        keepComments: false
     },
     debugging: {
-        debug: true
+        debug: true,
+        shortErrorMsgs: false
     }
 }
