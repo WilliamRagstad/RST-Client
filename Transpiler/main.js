@@ -33,7 +33,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const AST = parse(TOKENS);                                  // PARSER
         if (RST_SETTINGS.debugging.debug) console.log(AST);
         VARIABLES = [];                                             // CLEAR VARIABLE DICTIONARY/SYMBOL TABLE
-        STYLES[s].textContent = transpile(AST);                     // TRANSPILER
+        STYLES[s].textContent = transpile(AST).css;                     // TRANSPILER
     }
 });
 
@@ -66,6 +66,7 @@ function lex(SOURCE) {
     let isVariable = false;
     let isRule = false;
     let isRuleValue = false;
+    let isDeclaration = false;
 
     for (let i = 0; i < SOURCE.length; i++) {
         let cc = SOURCE[i]; // Current Character
@@ -91,15 +92,17 @@ function lex(SOURCE) {
             if (ct == "@") { isRule = true; isRuleValue  = false }
 
             if (cc == ":") {
-                if (isVariable) tokens.push(Token(t_variable, ct, line));
-                else tokens.push(Token(t_property, ct, line));
-                isVariable = false;
-                ct = "";
-                continue;
+                if (isDeclaration) {
+                    if (isVariable) tokens.push(Token(t_variable, ct, line));
+                    else tokens.push(Token(t_property, ct, line));
+                    isVariable = false;
+                    ct = "";
+                    continue;
+                }
             }
 
-            if (cc == "{") { tokens.push(Token(t_declaration, ct.trim(), line)); tokens.push(Token(t_separator, cc, line)); ct = ""; continue; }
-            if (cc == "}") { tokens.push(Token(t_separator, cc, line)); ct = ""; continue; }
+            if (cc == "{") { tokens.push(Token(t_declaration, ct.trim(), line)); tokens.push(Token(t_separator, cc, line)); ct = ""; isDeclaration = true; continue; }
+            if (cc == "}") { tokens.push(Token(t_separator, cc, line)); ct = ""; isDeclaration = false; continue; }
 
             if (cc == ";") {
                 if (isRule && isRuleValue) { tokens.push(Token(t_rule_value, ct, line)); }
@@ -195,7 +198,7 @@ function parse(TOKENS) {
                 }
             }
             else {
-                unexpectedToken(variableValue);
+                unexpectedToken(propertyValue);
             }
         }
 
@@ -228,8 +231,6 @@ function parse(TOKENS) {
 
 
 
-
-
 /*
  
  8888b.  888888 888888 88 88b 88 888888     888888 88""Yb    db    88b 88 .dP"Y8 88""Yb 88 88     888888 88""Yb 
@@ -243,15 +244,17 @@ function parse(TOKENS) {
 
 let VARIABLES; // This will not be used if RST_SETTINGS.output.keepVariables is true.
 
-function transpile(AST, indent) {
+function transpile(AST, isRoot) {
     // We transpile and return the AST
     let CSS = "";
 
-    if (indent == undefined || indent == null) indent = 0;
-    function addIndentions(_indent) {
-        if (_indent == undefined || _indent == null) _indent = indent;
-        if (!RST_SETTINGS.output.minify) {
-            for (let j = 0; j < _indent; j++) CSS += "    ";
+    let IS_ROOT = true;
+    if (isRoot != undefined || isRoot != null) IS_ROOT = isRoot;
+    let CHILD_DECLARATIONS = [];
+
+    function addIndentions() {
+        if (!RST_SETTINGS.output.minify && !IS_ROOT) {
+            CSS += "    ";
         }
     }
 
@@ -278,8 +281,7 @@ function transpile(AST, indent) {
         }
 
         if (NODE.type == p_rule) {
-            addIndentions();
-            CSS += NODE.values[0] + " " + NODE.values[1] + ";";
+            CSS += addRule(NODE.values[0], NODE.values[1]);
             if (!RST_SETTINGS.output.minify) CSS += "\n";
             continue;
         }
@@ -289,6 +291,9 @@ function transpile(AST, indent) {
             let propertyValue = NODE.values[1];
 
             if (RST_SETTINGS.output.keepVariables) {
+
+                // TODO: If variables doesn't update when style is reloaded, force add them to :root ?
+
                 addIndentions();
                 CSS += "--" + variableName + ":"
                 if (!RST_SETTINGS.output.minify) CSS += " ";
@@ -320,44 +325,50 @@ function transpile(AST, indent) {
             if (!RST_SETTINGS.output.minify) CSS += "\n";
             continue;
         }
-        
-        /* 
-        // TODO: Make these declarations not recursive
-        if (NODE.type == p_declaration) {
-            addIndentions();
-            CSS += NODE.values[0];
-            if (!RST_SETTINGS.output.minify) CSS += " ";
-            CSS += "{";
-            if (!RST_SETTINGS.output.minify) CSS += "\n";
-
-            CSS += transpile(NODE.values[1], indent+1);
-
-            addIndentions(indent);
-            CSS += "}";
-            if (!RST_SETTINGS.output.minify) CSS += "\n";
-            continue;
-        }
-        */
 
         if (NODE.type == p_declaration) {   // First transpile itself to css, then transpile all child declarations afterwards
-            addIndentions();
-            CSS += NODE.values[0];
-            if (!RST_SETTINGS.output.minify) CSS += " ";
-            CSS += "{";
-            if (!RST_SETTINGS.output.minify) CSS += "\n";
 
-            CSS += transpile(NODE.values[1], indent + 1);
+            let declaration = transpile(NODE.values[1], false);
 
-            addIndentions(indent);
-            CSS += "}";
-            if (!RST_SETTINGS.output.minify) CSS += "\n";
+            if (IS_ROOT) {
+
+                // Print all declarations
+                addIndentions();
+                CSS += NODE.values[0];
+                if (!RST_SETTINGS.output.minify) CSS += " ";
+                CSS += "{";
+                if (!RST_SETTINGS.output.minify) CSS += "\n";
+                CSS += declaration.css;
+
+                addIndentions();
+                CSS += "}";
+
+                // Add all child declarations afterwards
+                for (let d = 0; d < declaration.childDeclarations.length; d++) {
+                    if (!RST_SETTINGS.output.minify) CSS += "\n";
+                    CSS += NODE.values[0] + " " + declaration.childDeclarations[d].key;
+                    if (!RST_SETTINGS.output.minify) CSS += " ";
+                    CSS += "{";
+                    if (!RST_SETTINGS.output.minify) CSS += "\n";
+                    CSS += declaration.childDeclarations[d].value.css;
+                    CSS += "}";
+                }
+                if (!RST_SETTINGS.output.minify) CSS += "\n";
+            }
+            else {
+                // Add to child declarations
+                CHILD_DECLARATIONS.push(Declaration(NODE.values[0], declaration));
+            }
             continue;
         }
 
         unexpectedPattern(NODE);
     }
 
-    return CSS;
+    return {
+        css: CSS,
+        childDeclarations: CHILD_DECLARATIONS
+    }
 }
 
 
@@ -436,13 +447,55 @@ function trimExpression(expr) {
 }
 
 
-function evaluateRule(expr) {
-    if (!expr.endsWith(";")) expr += ";";
-    expr = evaluateVariables(expr);
+function addRule(rule, parameters) {
+    let CSS = "";
+    parameters = evaluateVariables(parameters);
 
-    /* TODO: If rule is @import, test if file to import is .scss, and if so:
-    * fetch("https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css").then(r => r.text()).then(r => console.log(r))
-    */
+    switch (rule.toLowerCase()) {
+        case "@import":
+            /* TODO: If rule is @import, test if file to import is .scss, and if so:
+            * fetch("https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css").then(r => r.text()).then(r => console.log(r))
+            */
+
+            // TODO: Throw error if @import is referencing a local file (Ex: file://C:/...)
+            
+            let importFiles = parameters.split(",");
+            for (let i = 0; i < importFiles.length; i++) {
+                let file = importFiles[i].replace(/[\"\']/g, "");
+                if (RST_SETTINGS.rules.import.underscorePrefix) file = "_" + file; // !: Bug in case file is in a folder
+                    
+                if (!file.includes(".") && RST_SETTINGS.rules.import.assumeScss)  {
+                    file += ".scss";
+                }
+                
+                if (file.toLowerCase().endsWith(".scss")) {
+                    if (RST_SETTINGS.rules.import.enableSassImports) {
+                        // Fetch the file
+                        fetch("https://rawcdn.githack.com/WilliamRagstad/RTS-Client/b54c77a47dd9fdd0798798b1f20239cd139cb32d/Transpiler/partial.scss").then(r => r.text()).then(content => {
+                            if (content) {
+                                console.log(content);
+                            }
+                        })
+
+                        // Transpile and Inject or append their content
+                    }
+                    else {
+                        generalError("Import Sass", "The rule for importion of .scss files is disabled.");
+                    }
+                }
+                else {
+                    CSS += rule + " " + parameters + ";";
+                }
+            }
+            break;
+    
+        default:    // Let CSS evaluate the rule
+            CSS += rule + " " + parameters + ";";
+            break;
+    }
+
+
+    return CSS;
 }
 
 
@@ -513,6 +566,7 @@ const p_comment = "P_COMMENT";
 function Token(type, value, line) { return {type: type, value: value, line: line} }
 function Pattern(type, ...values) { return {type: type, values: [...values] } }
 function Variable(key, value) { return {key: key, value: value} }
+function Declaration(key, value) { return {key: key, value: value} }
 
 
 
@@ -570,15 +624,22 @@ function VariableNotFound(variableName) {
 
 // Default settings
 let RST_SETTINGS = {
-    rules: {
-        importSass: false         // Send another request and transpile all imports to other .scss files,
-                                  // and create a new style tag with it's corresponding css.
+    rules: {    // @ - rule settings
+        import: {
+            // These settings are only available if imported file is fetched via http/https.
+            enableSassImports: true,    // Send another request and transpile all imports to other .scss files,
+                                        // and create a new style tag with it's corresponding css.
+            documentInjection: true,    // If importSass is true, instead of just adding all external .scss as separate <style> tags, inject them where
+                                        // the @import rule is and remove the rule.
+            assumeScss: true,           // If no file extension is provided, assume .scss
+            underscorePrefix: false     // @import 'file.scss' will look for and import the file: _file.scss
+        }
         
     },
     output: {
         minify: false,                  // Make the output compact
         shortenPropertyValues: true,    // Make double spaces to single spaces in property values
-        keepVariables: false,           // Convert Scss variables to CSS variables: $variable => --variable
+        keepVariables: true,           // Convert Scss variables to CSS variables: $variable => --variable
         keepComments: false
     },
     debugging: {

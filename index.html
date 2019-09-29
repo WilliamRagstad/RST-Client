@@ -18,10 +18,13 @@
         <section id="info">
             <h2>Welcome to the realtime sass transpiler!</h2>
             <p>
-                Lorem ipsum dolor sit, amet consectetur adipisicing elit.
-                Ipsam inventore corporis aperiam suscipit mollitia vel.
-                Qui dolor aspernatur dolorum.
-                Iure quae nam nihil esse aliquid quia culpa laboriosam excepturi impedit!</p>
+                Welcome to the RST Project! This is a transpiler for
+                Sass written completely in JavaScript. This transpiler have
+                full support for the SCSS syntax of Sass.<br><br>
+                Now you might be wondering; "But why would I ever want to transpile my Sass real-time?"
+                Well, good question… Think about it this way: Now you don't need to download any extra software,
+                pre-processors or such! Just link to the framework and it just works!
+            </p>
         </section>
     </main>
 </body>
@@ -32,11 +35,13 @@
                    Scss code            
 =============================================*/
 
-@import 'partial.css';
+@import 'Transpiler/partial.scss'; // Import other .SCSS files directly! 
 
-$font-stack:    Helvetica, sans-serif;
-// hello world
+:root{
+$font-stack:    Helvetica,     sans-serif;
+// hello world 
 $primary-color: #333;
+}
 
 body {
   font: 100%    $font-stack;
@@ -45,6 +50,7 @@ body {
   p {
       color: "red";
   }
+  // Then the li
   li { display: inline-block;}
 }
 // --- HEADER --- 

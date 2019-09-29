@@ -1,0 +1,16 @@
+h1 {
+  font-size: 200%;
+  font-weight: 500;
+}
+
+h1 b {
+  color: crimson;
+}
+
+h1, h1 section {
+  padding: 16px 32px;
+}
+
+main {
+  background: #83e7aa;
+}
