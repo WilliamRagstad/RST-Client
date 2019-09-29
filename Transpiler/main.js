@@ -37,10 +37,16 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+/*
+window.addEventListener("load", myOnLoad);
 
-
-
-
+async function myOnLoad() {
+    let response = await fetch('https://raw.githubusercontent.com/WilliamRagstad/RST-Client/master/Transpiler/partial.scss');
+    response.text().then(data => {
+        console.log(data);
+    });
+}
+*/
 
 
 
@@ -447,7 +453,7 @@ function trimExpression(expr) {
 }
 
 
-function addRule(rule, parameters) {
+async function addRule(rule, parameters) {
     let CSS = "";
     parameters = evaluateVariables(parameters);
 
@@ -468,16 +474,38 @@ function addRule(rule, parameters) {
                     file += ".scss";
                 }
                 
+
                 if (file.toLowerCase().endsWith(".scss")) {
                     if (RST_SETTINGS.rules.import.enableSassImports) {
                         // Fetch the file
-                        fetch("https://rawcdn.githack.com/WilliamRagstad/RTS-Client/b54c77a47dd9fdd0798798b1f20239cd139cb32d/Transpiler/partial.scss").then(r => r.text()).then(content => {
-                            if (content) {
-                                console.log(content);
-                            }
-                        })
+                        let response = await fetch(file);
+                        let content = await  response.text();
+                        if (content) {
 
-                        // Transpile and Inject or append their content
+                            console.log("Importing and transpiling: " + file);
+
+                            // Transpile response
+
+                            const SOURCE = content + T_NEWLINE; // SINGLE INPUT
+                            const TOKENS = lex(SOURCE);         // LEXER
+                            const AST = parse(TOKENS);          // PARSER
+                            content = transpile(AST).css;       // TRANSPILER
+
+                            // Inject or append the transpiled response
+
+                            if (RST_SETTINGS.rules.import.documentInjection) {
+                                // Inject content in CSS
+                                CSS += content;
+                                console.log("Injected file to document");
+                            }
+                            else {
+                                // Create new <style> with content
+                                let styleElement = document.createElement("style");
+                                styleElement.textContent = content;
+                                document.body.appendChild(styleElement);
+                                console.log("Appended file to document");
+                            }
+                        }
                     }
                     else {
                         generalError("Import Sass", "The rule for importion of .scss files is disabled.");
