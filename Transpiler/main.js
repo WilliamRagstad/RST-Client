@@ -25,17 +25,23 @@
 
 // Attaching to DOMContentLoaded -> Transpile all style elements
 window.addEventListener('DOMContentLoaded', () => {
+    VARIABLES = []; // CLEAR VARIABLE DICTIONARY/SYMBOL TABLE
     const STYLES = document.getElementsByTagName("style");
     for (let s = 0; s < STYLES.length; s++) {
-        const SOURCE = STYLES[s].textContent + T_NEWLINE;           // SINGLE INPUT
-        const TOKENS = lex(SOURCE);                                 // LEXER
-        if (RST_SETTINGS.debugging.debug) console.table(TOKENS);
-        const AST = parse(TOKENS);                                  // PARSER
-        if (RST_SETTINGS.debugging.debug) console.log(AST);
-        VARIABLES = [];                                             // CLEAR VARIABLE DICTIONARY/SYMBOL TABLE
-        STYLES[s].textContent = transpile(AST).css;                     // TRANSPILER
+        transpileStyleElement(STYLES[s]);
     }
 });
+
+async function transpileStyleElement(styleElement) {
+    const SOURCE = styleElement.textContent + T_NEWLINE;        // SINGLE INPUT
+    const TOKENS = lex(SOURCE);                                 // LEXER
+    if (RST_SETTINGS.debugging.debug) console.table(TOKENS);
+    const AST = parse(TOKENS);                                  // PARSER
+    if (RST_SETTINGS.debugging.debug) console.log(AST);
+    const RESULT = await transpile(AST);                        // TRANSPILER
+    if (RST_SETTINGS.debugging.debug) console.log(RESULT);
+    styleElement.textContent = RESULT.css;
+}
 
 /*
 window.addEventListener("load", myOnLoad);
@@ -250,7 +256,7 @@ function parse(TOKENS) {
 
 let VARIABLES; // This will not be used if RST_SETTINGS.output.keepVariables is true.
 
-function transpile(AST, isRoot) {
+async function transpile(AST, isRoot) {
     // We transpile and return the AST
     let CSS = "";
 
@@ -287,7 +293,8 @@ function transpile(AST, isRoot) {
         }
 
         if (NODE.type == p_rule) {
-            CSS += addRule(NODE.values[0], NODE.values[1]);
+            const RESULT = await addRule(NODE.values[0], NODE.values[1]);
+            CSS += RESULT;
             if (!RST_SETTINGS.output.minify) CSS += "\n";
             continue;
         }
@@ -334,7 +341,7 @@ function transpile(AST, isRoot) {
 
         if (NODE.type == p_declaration) {   // First transpile itself to css, then transpile all child declarations afterwards
 
-            let declaration = transpile(NODE.values[1], false);
+            const declaration = await transpile(NODE.values[1], false);
 
             if (IS_ROOT) {
 
@@ -464,60 +471,88 @@ async function addRule(rule, parameters) {
             */
 
             // TODO: Throw error if @import is referencing a local file (Ex: file://C:/...)
-            
+
             let importFiles = parameters.split(",");
             for (let i = 0; i < importFiles.length; i++) {
                 let file = importFiles[i].replace(/[\"\']/g, "");
                 if (RST_SETTINGS.rules.import.underscorePrefix) file = "_" + file; // !: Bug in case file is in a folder
-                    
-                if (!file.includes(".") && RST_SETTINGS.rules.import.assumeScss)  {
+
+                if (!file.includes(".") && RST_SETTINGS.rules.import.assumeScss) {
                     file += ".scss";
                 }
-                
+
 
                 if (file.toLowerCase().endsWith(".scss")) {
                     if (RST_SETTINGS.rules.import.enableSassImports) {
                         // Fetch the file
-                        let response = await fetch(file);
-                        let content = await  response.text();
-                        if (content) {
+                        try {
+                            const response = await fetch(file);
+                            let responseText = await response.text();
+                            
+                            if (responseText) {
 
-                            console.log("Importing and transpiling: " + file);
+                                if (RST_SETTINGS.debugging.debug) console.log("Importing and transpiling: " + file);
 
-                            // Transpile response
+                                // Transpile response
 
-                            const SOURCE = content + T_NEWLINE; // SINGLE INPUT
-                            const TOKENS = lex(SOURCE);         // LEXER
-                            const AST = parse(TOKENS);          // PARSER
-                            content = transpile(AST).css;       // TRANSPILER
+                                const SOURCE = responseText + T_NEWLINE; // SINGLE INPUT
+                                const TOKENS = lex(SOURCE); // LEXER
+                                const AST = parse(TOKENS); // PARSER
+                                const RESULT = await transpile(AST);
+                                let content = RESULT.css; // TRANSPILER
 
-                            // Inject or append the transpiled response
+                                if (RST_SETTINGS.rules.import.showImportFileHeaders) {
+                                    let commentStart = "/*";
+                                    if (!RST_SETTINGS.output.minify) commentStart += " ";
+                                    commentStart += "START OF FILE: " + file;
+                                    if (!RST_SETTINGS.output.minify) commentStart += " ";
+                                    commentStart += "*/";
+                                    if (!RST_SETTINGS.output.minify) commentStart += "\n";
 
-                            if (RST_SETTINGS.rules.import.documentInjection) {
-                                // Inject content in CSS
-                                CSS += content;
-                                console.log("Injected file to document");
+                                    let commentEnd = "/*";
+                                    if (!RST_SETTINGS.output.minify) commentEnd += " ";
+                                    commentEnd += "END OF FILE: " + file;
+                                    if (!RST_SETTINGS.output.minify) commentEnd += " ";
+                                    commentEnd += "*/";
+                                    if (!RST_SETTINGS.output.minify) commentEnd += "\n";
+
+                                    content = commentStart + content + commentEnd;
+                                }
+
+                                // Inject or append the transpiled response
+
+                                if (RST_SETTINGS.rules.import.documentInjection) {
+                                    // Inject content in CSS
+                                    CSS += content;
+                                    if (RST_SETTINGS.debugging.debug) console.log("Injected file to document");
+                                } else {
+                                    // Create new <style> with content
+                                    let styleElement = document.createElement("style");
+                                    styleElement.textContent = content;
+                                    document.body.appendChild(styleElement);
+                                    if (RST_SETTINGS.debugging.debug) console.log("Appended file to document");
+                                }
+                            } else {
+                                generalError("Import Sass", "Failed to load content: unkown error...");
+                                CSS += rule + " " + parameters + ";";
                             }
-                            else {
-                                // Create new <style> with content
-                                let styleElement = document.createElement("style");
-                                styleElement.textContent = content;
-                                document.body.appendChild(styleElement);
-                                console.log("Appended file to document");
-                            }
+
+                        } catch (error) {
+                            generalError("Import Sass", "Failed to load content: " + error);
+                            CSS += rule + " " + parameters + ";";
                         }
-                    }
-                    else {
+                        
+                    } else {
                         generalError("Import Sass", "The rule for importion of .scss files is disabled.");
+                        CSS += rule + " " + parameters + ";";
                     }
-                }
-                else {
+                } else {
                     CSS += rule + " " + parameters + ";";
                 }
             }
             break;
-    
-        default:    // Let CSS evaluate the rule
+
+        default: // Let CSS evaluate the rule
             CSS += rule + " " + parameters + ";";
             break;
     }
@@ -657,21 +692,22 @@ let RST_SETTINGS = {
             // These settings are only available if imported file is fetched via http/https.
             enableSassImports: true,    // Send another request and transpile all imports to other .scss files,
                                         // and create a new style tag with it's corresponding css.
-            documentInjection: true,    // If importSass is true, instead of just adding all external .scss as separate <style> tags, inject them where
+            documentInjection: false,    // If importSass is true, instead of just adding all external .scss as separate <style> tags, inject them where
                                         // the @import rule is and remove the rule.
             assumeScss: true,           // If no file extension is provided, assume .scss
-            underscorePrefix: false     // @import 'file.scss' will look for and import the file: _file.scss
+            underscorePrefix: false,    // @import 'file.scss' will look for and import the file: _file.scss
+            showImportFileHeaders: true // Show where imported files are imported from with comments
         }
-        
     },
     output: {
         minify: false,                  // Make the output compact
         shortenPropertyValues: true,    // Make double spaces to single spaces in property values
         keepVariables: true,           // Convert Scss variables to CSS variables: $variable => --variable
-        keepComments: false
+        keepComments: false,
+        removeEmptyDeclarations: true  //* Implement
     },
     debugging: {
-        debug: true,
+        debug: false,
         shortErrorMsgs: false
     }
 }

@@ -7,7 +7,7 @@ h1 b {
   color: crimson;
 }
 
-h1, h1 section {
+h1 section {
   padding: 16px 32px;
 }
 
