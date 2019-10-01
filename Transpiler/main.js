@@ -26,9 +26,18 @@
 // Attaching to DOMContentLoaded -> Transpile all style elements
 window.addEventListener('DOMContentLoaded', () => {
     VARIABLES = []; // CLEAR VARIABLE DICTIONARY/SYMBOL TABLE
+
+    // Transpile all style tags
     const STYLES = document.getElementsByTagName("style");
     for (let s = 0; s < STYLES.length; s++) {
         transpileStyleElement(STYLES[s]);
+    }
+    // Fetch all link tags with href ending with .scss
+    if (RST_SETTINGS.link.enableSassLinking) {
+        const LINKS = document.querySelectorAll('link[href$=".scss"]');
+        for (let s = 0; s < LINKS.length; s++) {
+            transpileLinkElement(STYLES[s]);
+        }
     }
 });
 
@@ -41,6 +50,28 @@ async function transpileStyleElement(styleElement) {
     const RESULT = await transpile(AST);                        // TRANSPILER
     if (RST_SETTINGS.debugging.debug) console.log(RESULT);
     styleElement.textContent = RESULT.css;
+}
+
+async function transpileLinkElement(linkElement) {
+    const RESPONSE = await fetch(linkElement.getAttribute("href"));
+    const RESPONSE_TEXT = await RESPONSE.text();
+    const SOURCE = RESPONSE_TEXT + T_NEWLINE;        // SINGLE INPUT
+    const TOKENS = lex(SOURCE);                                 // LEXER
+    if (RST_SETTINGS.debugging.debug) console.table(TOKENS);
+    const AST = parse(TOKENS);                                  // PARSER
+    if (RST_SETTINGS.debugging.debug) console.log(AST);
+    const RESULT = await transpile(AST);                        // TRANSPILER
+    if (RST_SETTINGS.debugging.debug) console.log(RESULT);
+
+    let styleElement = document.createElement("style");
+    styleElement.textContent = RESULT.css;
+    if (RST_SETTINGS.link.documentInjection) {
+        linkElement.parentElement.appendChild(styleElement);
+    }
+    else {
+        document.body.appendChild(styleElement);
+    }
+    linkElement.parentElement.removeChild(linkElement);
 }
 
 /*
@@ -698,6 +729,12 @@ let RST_SETTINGS = {
             underscorePrefix: false,    // @import 'file.scss' will look for and import the file: _file.scss
             showImportFileHeaders: true // Show where imported files are imported from with comments
         }
+    },
+    link: {
+        // These settings are only available if imported file is fetched via http/https.
+        enableSassLinking: true,    // Just as a <link rel="stylesheet" href="https://.../style.css">, you can link to .scss files aswell
+        documentInjection: false    // If SassLinking is true, instead of just adding all external .scss as separate <style> tags, inject them where
+                                    // the <link> tag was
     },
     output: {
         minify: false,                  // Make the output compact
