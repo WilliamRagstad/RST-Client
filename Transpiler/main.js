@@ -810,7 +810,7 @@ let RST_SETTINGS = {
         removeEmptyDeclarations: false  // Removes redundant/empty declarations
     },
     debugging: {
-        debug: true,
+        debug: false,
         shortErrorMsgs: false
     }
 }

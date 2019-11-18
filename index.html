@@ -15,6 +15,17 @@
         // Configure RST
         //RST_SETTINGS.output.minify = true;
         //RST_SETTINGS.link.showLinkFileHeaders = false;
+
+        /**
+         *!   OBS!
+         *!  ¨¨¨¨¨
+         **  Importing external Scss files using a <link> tag will throw the following error (below) in the console.
+         *                                                   ¨¨¨¨
+         **  This is not something that is possible to remove.
+         **  Everything is working just as it should... (unless you see another error)
+         *                 ¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨
+         *?  "Refused to apply style from '...' because its MIME type ('text/plain') is not a supported stylesheet MIME type, and strict MIME checking is enabled."
+         */
     </script>
 </head>
 <body>
@@ -86,6 +97,8 @@ header {
 <style>
 p {
     &:hover {
+        cursor: pointer;
+
         > a::before {
             content: "->";
         }
@@ -95,7 +108,7 @@ p {
     }
 
     &:active {
-        color: red;
+        font-weight: bold;
     }
 }
 
