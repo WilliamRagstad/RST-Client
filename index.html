@@ -11,12 +11,29 @@
         href="https://raw.githubusercontent.com/WilliamRagstad/RST-Client/master/Transpiler/partial.scss">
 
     <script src="Transpiler/main.js"></script>
+    <script>
+        // Configure RST
+        //RST_SETTINGS.output.minify = true;
+        //RST_SETTINGS.link.showLinkFileHeaders = false;
+
+        /**
+         *!   OBS!
+         *!  ¨¨¨¨¨
+         **  Importing external Scss files using a <link> tag will throw the following error (below) in the console.
+         *                                                   ¨¨¨¨
+         **  This is not something that is possible to remove.
+         **  Everything is working just as it should... (unless you see another error)
+         *                 ¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨
+         *?  "Refused to apply style from '...' because its MIME type ('text/plain') is not a supported stylesheet MIME type, and strict MIME checking is enabled."
+         */
+    </script>
 </head>
 <body>
     <header>
         <nav>
             <h1 class="Title"><b>R</b>ealtime <b>S</b>ass <b>T</b>ranspiler</h1>
         </nav>
+        <span class="splash"></span>
     </header>
     <main>
         <section id="info">
@@ -28,6 +45,7 @@
                 Now you might be wondering; "But why would I ever want to transpile my Sass real-time?"
                 Well, good question… Think about it this way: Now you don't need to download any extra software,
                 pre-processors or such! Just link to the framework and it just works!
+                <a href="#clicked">Click me :D</a>
             </p>
         </section>
     </main>
@@ -40,7 +58,8 @@
 =============================================*/
 
 // Import other .SCSS files directly!
-@import 'https://raw.githubusercontent.com/WilliamRagstad/RST-Client/master/Transpiler/partial.scss';
+// in your css code, or just using a normal <link> element pointing towards a .scss file instead! :D
+// @import 'https://raw.githubusercontent.com/WilliamRagstad/RST-Client/master/Transpiler/partial.scss';
 
 :root{
 $font-stack:    Helvetica,     sans-serif;
@@ -59,7 +78,50 @@ body {
   li { display: inline-block;}
 }
 // --- HEADER --- 
-header { font: 100% $font-stack; background-color: #efefef; }
+header {
+    font: 100% $font-stack; background-color: #efefef; position: relative;
+    span.splash::after {
+        content: $my-new-var;
+        position: absolute;
+        background: coral;
+        padding: 4px 32px;
+        border-radius: 20px 0;
+        transform: translate(0,-50%) rotate(-30deg);
+        top: 50%;
+        right: 0;
+    }
+}
+
+</style>
+
+<style>
+p {
+    &:hover {
+        cursor: pointer;
+
+        > a::before {
+            content: "->";
+        }
+        > a::after {
+            content: "<-";
+        }
+    }
+
+    &:active {
+        font-weight: bold;
+    }
+}
+
+
+// --- HEADER --- 
+
+header { font: 100% $font-stack; background-color: #efefef;
+    span.splash::after {
+        content: $my-new-var;
+        display: block;
+    }
+}
+
 
 </style>
 

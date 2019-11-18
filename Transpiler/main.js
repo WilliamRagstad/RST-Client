@@ -34,9 +34,9 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     // Fetch all link tags with href ending with .scss
     if (RST_SETTINGS.link.enableSassLinking) {
-        const LINKS = document.querySelectorAll('link[href$=".scss"]');
+        const LINKS = document.querySelectorAll('link[href*=".scss"]');
         for (let s = 0; s < LINKS.length; s++) {
-            transpileLinkElement(STYLES[s]);
+            transpileLinkElement(LINKS[s]);
         }
     }
 });
@@ -53,7 +53,8 @@ async function transpileStyleElement(styleElement) {
 }
 
 async function transpileLinkElement(linkElement) {
-    const RESPONSE = await fetch(linkElement.getAttribute("href"));
+    const HREF = linkElement.getAttribute("href");
+    const RESPONSE = await fetch(HREF);
     const RESPONSE_TEXT = await RESPONSE.text();
     const SOURCE = RESPONSE_TEXT + T_NEWLINE;        // SINGLE INPUT
     const TOKENS = lex(SOURCE);                                 // LEXER
@@ -64,7 +65,27 @@ async function transpileLinkElement(linkElement) {
     if (RST_SETTINGS.debugging.debug) console.log(RESULT);
 
     let styleElement = document.createElement("style");
-    styleElement.textContent = RESULT.css;
+    let content = RESULT.css;
+
+    if (RST_SETTINGS.link.showLinkFileHeaders) {
+        let commentStart = "/*";
+        if (!RST_SETTINGS.output.minify) commentStart += " ";
+        commentStart += "START OF LINKED FILE: " + HREF;
+        if (!RST_SETTINGS.output.minify) commentStart += " ";
+        commentStart += "*/";
+        if (!RST_SETTINGS.output.minify) commentStart += "\n";
+
+        let commentEnd = "/*";
+        if (!RST_SETTINGS.output.minify) commentEnd += " ";
+        commentEnd += "END OF LINKED FILE: " + HREF;
+        if (!RST_SETTINGS.output.minify) commentEnd += " ";
+        commentEnd += "*/";
+        if (!RST_SETTINGS.output.minify) commentEnd += "\n";
+
+        content = commentStart + content + commentEnd;
+    }
+
+    styleElement.textContent = content;
     if (RST_SETTINGS.link.documentInjection) {
         linkElement.parentElement.appendChild(styleElement);
     }
@@ -98,6 +119,14 @@ async function myOnLoad() {
 */
 
 function lex(SOURCE) {
+    // Lexer utility functions
+    // Next nearest upcoming character
+    function peekNext(startIndex, values) {
+        for (let j = startIndex; j < SOURCE.length; j++) if (values.includes(SOURCE[j])) return SOURCE[j];
+        return false;
+    }
+
+
     // Tokenize the SOURCE
     const tokens = []; // Results
     let ct = "";     // Current Token
@@ -113,6 +142,7 @@ function lex(SOURCE) {
 
     for (let i = 0; i < SOURCE.length; i++) {
         let cc = SOURCE[i]; // Current Character
+        let nc = i + 1 < SOURCE.length  ? SOURCE[i+1] : ""; // Next Character
 
         if (ct == "//") isLineComment = true;
         if (isLineComment && cc == "\n") { isLineComment = false; tokens.push(Token(t_comment, ct, line)); ct = ""; line++; continue; }
@@ -136,11 +166,22 @@ function lex(SOURCE) {
 
             if (cc == ":") {
                 if (isDeclaration) {
-                    if (isVariable) tokens.push(Token(t_variable, ct, line));
-                    else tokens.push(Token(t_property, ct, line));
-                    isVariable = false;
-                    ct = "";
-                    continue;
+                    // Peek if there's a { coming up...
+                    const type = peekNext(i, [";", "{"]);
+                    if (type == "{") {
+                        ct += cc;
+                        continue;
+                    }
+                    else if (type == ";") {
+                        if (isVariable) tokens.push(Token(t_variable, ct, line));
+                        else tokens.push(Token(t_property, ct, line));
+                        isVariable = false;
+                        ct = "";
+                        continue;
+                    }
+                    else {
+                        generalError("Unexpected Token", "The token ':' was unexpected here.", line);
+                    }
                 }
             }
 
@@ -163,8 +204,6 @@ function lex(SOURCE) {
 
     return tokens;
 }
-
-
 
 
 
@@ -247,7 +286,7 @@ function parse(TOKENS) {
 
         if (cToken.type == t_declaration) {
             let scope = 0;
-            let separatorOpen = nextToken();
+            let separatorOpen = nextToken(); // Just pop the token off the stack...
             let declarationTokens = [];
             let cDeclarationToken;
             while (cDeclarationToken = nextToken()) {
@@ -371,31 +410,57 @@ async function transpile(AST, isRoot) {
         }
 
         if (NODE.type == p_declaration) {   // First transpile itself to css, then transpile all child declarations afterwards
-
+            //debugger;
             const declaration = await transpile(NODE.values[1], false);
 
             if (IS_ROOT) {
 
-                // Print all declarations
-                addIndentions();
-                CSS += NODE.values[0];
-                if (!RST_SETTINGS.output.minify) CSS += " ";
-                CSS += "{";
-                if (!RST_SETTINGS.output.minify) CSS += "\n";
-                CSS += declaration.css;
-
-                addIndentions();
-                CSS += "}";
-
-                // Add all child declarations afterwards
-                for (let d = 0; d < declaration.childDeclarations.length; d++) {
-                    if (!RST_SETTINGS.output.minify) CSS += "\n";
-                    CSS += NODE.values[0] + " " + declaration.childDeclarations[d].key;
+                if (declaration.css.trim() == "" && RST_SETTINGS.output.removeEmptyDeclarations) { /* Don't add */ }
+                else {
+                    // Print all declarations
+                    addIndentions();
+                    CSS += NODE.values[0];
                     if (!RST_SETTINGS.output.minify) CSS += " ";
                     CSS += "{";
                     if (!RST_SETTINGS.output.minify) CSS += "\n";
-                    CSS += declaration.childDeclarations[d].value.css;
+                    CSS += declaration.css;
+
+                    addIndentions();
                     CSS += "}";
+                }
+
+                // Add all child declarations afterwards
+                function transpileDeclaration(decl, prefix) {
+                    result = "";
+                    if (decl.key.includes("&")) {
+                        prefix = decl.key.replace(new RegExp("&", "g"), prefix);
+                    }
+                    else {
+                        prefix = prefix + " " + decl.key;
+                    }
+                    if (decl.value.css.trim() == "" && RST_SETTINGS.output.removeEmptyDeclarations) { /* Don't add */ }
+                    else {
+                        if (!RST_SETTINGS.output.minify) result += "\n";
+                        result += prefix;
+                        if (!RST_SETTINGS.output.minify) result += " ";
+                        result += "{";
+                        if (!RST_SETTINGS.output.minify) result += "\n";
+                        result += decl.value.css;
+                        result += "}";
+                    }
+
+                    for (let d = 0; d < decl.value.childDeclarations.length; d++) {
+                        result += transpileDeclaration(decl.value.childDeclarations[d], prefix);
+                    }
+
+                    // Transpile all child declarations
+
+                    return result;
+                }
+
+                // Transpile all child declarations
+                for (let d = 0; d < declaration.childDeclarations.length; d++) {
+                    CSS += transpileDeclaration(declaration.childDeclarations[d], NODE.values[0]);
                 }
                 if (!RST_SETTINGS.output.minify) CSS += "\n";
             }
@@ -535,14 +600,14 @@ async function addRule(rule, parameters) {
                                 if (RST_SETTINGS.rules.import.showImportFileHeaders) {
                                     let commentStart = "/*";
                                     if (!RST_SETTINGS.output.minify) commentStart += " ";
-                                    commentStart += "START OF FILE: " + file;
+                                    commentStart += "START OF IMPORTED FILE: " + file;
                                     if (!RST_SETTINGS.output.minify) commentStart += " ";
                                     commentStart += "*/";
                                     if (!RST_SETTINGS.output.minify) commentStart += "\n";
 
                                     let commentEnd = "/*";
                                     if (!RST_SETTINGS.output.minify) commentEnd += " ";
-                                    commentEnd += "END OF FILE: " + file;
+                                    commentEnd += "END OF IMPORTED FILE: " + file;
                                     if (!RST_SETTINGS.output.minify) commentEnd += " ";
                                     commentEnd += "*/";
                                     if (!RST_SETTINGS.output.minify) commentEnd += "\n";
@@ -604,24 +669,24 @@ async function addRule(rule, parameters) {
 */
 
 // Token Definitions
-const t_identifier = "T_IDENTIFIER";
-const t_keyword = "T_KEYWORD";
-const t_operator = "T_OPERATOR";
-const t_literal = "T_LITERAL";
-const t_comment = "T_COMMENT";
-const t_separator = "T_SEPARATOR";
+const t_identifier  = "T_IDENTIFIER";
+const t_keyword     = "T_KEYWORD";
+const t_operator    = "T_OPERATOR";
+const t_literal     = "T_LITERAL";
+const t_comment     = "T_COMMENT";
+const t_separator   = "T_SEPARATOR";
 
 // SctS Spesific
-const t_selector = "T_SELECTOR";
-const t_declaration = "T_DECLARATION";
-const t_property = "T_PROPERTY";
-const t_property_value = "T_PROPERTY_VALUE";
-const t_variable = "T_VARIABLE";
-const t_rule = "T_RULE";
-const t_rule_value = "T_RULE_VALUE";
+const t_selector        = "T_SELECTOR";
+const t_declaration     = "T_DECLARATION";
+const t_property        = "T_PROPERTY";
+const t_property_value  = "T_PROPERTY_VALUE";
+const t_variable        = "T_VARIABLE";
+const t_rule            = "T_RULE";
+const t_rule_value      = "T_RULE_VALUE";
 
+// Other
 const T_NEWLINE = "\n";
-
 
 
 
@@ -727,21 +792,22 @@ let RST_SETTINGS = {
                                         // the @import rule is and remove the rule.
             assumeScss: true,           // If no file extension is provided, assume .scss
             underscorePrefix: false,    // @import 'file.scss' will look for and import the file: _file.scss
-            showImportFileHeaders: true // Show where imported files are imported from with comments
+            showImportFileHeaders: true // Show where imported files are imported from
         }
     },
     link: {
         // These settings are only available if imported file is fetched via http/https.
         enableSassLinking: true,    // Just as a <link rel="stylesheet" href="https://.../style.css">, you can link to .scss files aswell
-        documentInjection: false    // If SassLinking is true, instead of just adding all external .scss as separate <style> tags, inject them where
+        documentInjection: false,   // If SassLinking is true, instead of just adding all external .scss as separate <style> tags, inject them where
                                     // the <link> tag was
+        showLinkFileHeaders: true   // Show where linked files are imported from
     },
     output: {
         minify: false,                  // Make the output compact
         shortenPropertyValues: true,    // Make double spaces to single spaces in property values
         keepVariables: true,           // Convert Scss variables to CSS variables: $variable => --variable
         keepComments: false,
-        removeEmptyDeclarations: true  //* Implement
+        removeEmptyDeclarations: false  // Removes redundant/empty declarations
     },
     debugging: {
         debug: false,
