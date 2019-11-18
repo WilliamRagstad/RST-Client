@@ -75,20 +75,27 @@ header {
         background: coral;
         padding: 4px 32px;
         border-radius: 20px 0;
-        transform: rotate(-30deg);
-        top: 0;
+        transform: translate(0,-50%) rotate(-30deg);
+        top: 50%;
         right: 0;
     }
 }
 
 </style>
+
 <style>
-p:hover {
-    > a::before {
-        content: "->";
+p {
+    &:hover {
+        > a::before {
+            content: "->";
+        }
+        > a::after {
+            content: "<-";
+        }
     }
-    > a::after {
-        content: "<-";
+
+    &:active {
+        color: red;
     }
 }
 
@@ -102,6 +109,7 @@ header { font: 100% $font-stack; background-color: #efefef;
     }
 }
 
+
 </style>
 
 <style>
@@ -112,4 +120,5 @@ header { font: 100% $font-stack; background-color: #efefef;
         }
     }
 </style>
+
 </html>

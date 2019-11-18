@@ -286,7 +286,7 @@ function parse(TOKENS) {
 
         if (cToken.type == t_declaration) {
             let scope = 0;
-            let separatorOpen = nextToken();
+            let separatorOpen = nextToken(); // Just pop the token off the stack...
             let declarationTokens = [];
             let cDeclarationToken;
             while (cDeclarationToken = nextToken()) {
@@ -410,31 +410,57 @@ async function transpile(AST, isRoot) {
         }
 
         if (NODE.type == p_declaration) {   // First transpile itself to css, then transpile all child declarations afterwards
-
+            //debugger;
             const declaration = await transpile(NODE.values[1], false);
 
             if (IS_ROOT) {
 
-                // Print all declarations
-                addIndentions();
-                CSS += NODE.values[0];
-                if (!RST_SETTINGS.output.minify) CSS += " ";
-                CSS += "{";
-                if (!RST_SETTINGS.output.minify) CSS += "\n";
-                CSS += declaration.css;
-
-                addIndentions();
-                CSS += "}";
-
-                // Add all child declarations afterwards
-                for (let d = 0; d < declaration.childDeclarations.length; d++) {
-                    if (!RST_SETTINGS.output.minify) CSS += "\n";
-                    CSS += NODE.values[0] + " " + declaration.childDeclarations[d].key;
+                if (declaration.css.trim() == "" && RST_SETTINGS.output.removeEmptyDeclarations) { /* Don't add */ }
+                else {
+                    // Print all declarations
+                    addIndentions();
+                    CSS += NODE.values[0];
                     if (!RST_SETTINGS.output.minify) CSS += " ";
                     CSS += "{";
                     if (!RST_SETTINGS.output.minify) CSS += "\n";
-                    CSS += declaration.childDeclarations[d].value.css;
+                    CSS += declaration.css;
+
+                    addIndentions();
                     CSS += "}";
+                }
+
+                // Add all child declarations afterwards
+                function transpileDeclaration(decl, prefix) {
+                    result = "";
+                    if (decl.key.includes("&")) {
+                        prefix = decl.key.replace(new RegExp("&", "g"), prefix);
+                    }
+                    else {
+                        prefix = prefix + " " + decl.key;
+                    }
+                    if (decl.value.css.trim() == "" && RST_SETTINGS.output.removeEmptyDeclarations) { /* Don't add */ }
+                    else {
+                        if (!RST_SETTINGS.output.minify) result += "\n";
+                        result += prefix;
+                        if (!RST_SETTINGS.output.minify) result += " ";
+                        result += "{";
+                        if (!RST_SETTINGS.output.minify) result += "\n";
+                        result += decl.value.css;
+                        result += "}";
+                    }
+
+                    for (let d = 0; d < decl.value.childDeclarations.length; d++) {
+                        result += transpileDeclaration(decl.value.childDeclarations[d], prefix);
+                    }
+
+                    // Transpile all child declarations
+
+                    return result;
+                }
+
+                // Transpile all child declarations
+                for (let d = 0; d < declaration.childDeclarations.length; d++) {
+                    CSS += transpileDeclaration(declaration.childDeclarations[d], NODE.values[0]);
                 }
                 if (!RST_SETTINGS.output.minify) CSS += "\n";
             }
@@ -781,7 +807,7 @@ let RST_SETTINGS = {
         shortenPropertyValues: true,    // Make double spaces to single spaces in property values
         keepVariables: true,           // Convert Scss variables to CSS variables: $variable => --variable
         keepComments: false,
-        removeEmptyDeclarations: true  //* Implement
+        removeEmptyDeclarations: false  // Removes redundant/empty declarations
     },
     debugging: {
         debug: true,
