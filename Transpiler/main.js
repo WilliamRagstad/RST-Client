@@ -61,7 +61,9 @@ async function transpileLinkElement(linkElement) {
     if (RST_SETTINGS.debugging.debug) console.table(TOKENS);
     const AST = parse(TOKENS);                                  // PARSER
     if (RST_SETTINGS.debugging.debug) console.log(AST);
-    const RESULT = await transpile(AST);                        // TRANSPILER
+    let HREF_DIR = HREF.split("/");
+    HREF_DIR = HREF_DIR.splice(0, HREF_DIR.length - 1).join("/") + "/";
+    const RESULT = await transpile(AST, null, HREF_DIR);                        // TRANSPILER
     if (RST_SETTINGS.debugging.debug) console.log(RESULT);
 
     let styleElement = document.createElement("style");
@@ -126,7 +128,6 @@ function lex(SOURCE) {
         return false;
     }
 
-
     // Tokenize the SOURCE
     const tokens = []; // Results
     let ct = "";     // Current Token
@@ -165,23 +166,21 @@ function lex(SOURCE) {
             if (ct == "@") { isRule = true; isRuleValue  = false }
 
             if (cc == ":") {
-                if (isDeclaration) {
-                    // Peek if there's a { coming up...
-                    const type = peekNext(i, [";", "{"]);
-                    if (type == "{") {
-                        ct += cc;
-                        continue;
-                    }
-                    else if (type == ";") {
-                        if (isVariable) tokens.push(Token(t_variable, ct, line));
-                        else tokens.push(Token(t_property, ct, line));
-                        isVariable = false;
-                        ct = "";
-                        continue;
-                    }
-                    else {
-                        generalError("Unexpected Token", "The token ':' was unexpected here.", line);
-                    }
+                // Peek if there's a { coming up...
+                const type = peekNext(i, [";", "{"]);
+                if (type == "{") {
+                    ct += cc;
+                    continue;
+                }
+                else if (type == ";") {
+                    if (isVariable) tokens.push(Token(t_variable, ct, line));
+                    else tokens.push(Token(t_property, ct, line));
+                    isVariable = false;
+                    ct = "";
+                    continue;
+                }
+                else {
+                    generalError("Unexpected Token", "The token ':' was unexpected here.", line);
                 }
             }
 
@@ -233,6 +232,8 @@ function parse(TOKENS) {
         if (cToken.type == t_comment) { ast.push(Pattern(p_comment, cToken.value)); continue; }
 
         if (cToken.type == t_rule) {
+            debugger
+
             let ruleIdentifier = cToken.value;
             let ruleValue = nextToken();
             if (ruleValue.type == t_rule_value) {
@@ -244,6 +245,9 @@ function parse(TOKENS) {
                 else {
                     unexpectedToken(separator);
                 }
+            }
+            else if (ruleIdentifier.toLowerCase() == "@mixin" && ruleValue.type == t_declaration) { //* Mixins
+                //TODO: Implement
             }
             else {
                 unexpectedToken(ruleValue);
@@ -326,7 +330,7 @@ function parse(TOKENS) {
 
 let VARIABLES; // This will not be used if RST_SETTINGS.output.keepVariables is true.
 
-async function transpile(AST, isRoot) {
+async function transpile(AST, isRoot, context) {
     // We transpile and return the AST
     let CSS = "";
 
@@ -363,7 +367,7 @@ async function transpile(AST, isRoot) {
         }
 
         if (NODE.type == p_rule) {
-            const RESULT = await addRule(NODE.values[0], NODE.values[1]);
+            const RESULT = await addRule(NODE.values[0], NODE.values[1], context);
             CSS += RESULT;
             if (!RST_SETTINGS.output.minify) CSS += "\n";
             continue;
@@ -556,7 +560,8 @@ function trimExpression(expr) {
 }
 
 
-async function addRule(rule, parameters) {
+async function addRule(rule, parameters, context) {
+    context = context == undefined ? "" : context;
     let CSS = "";
     parameters = evaluateVariables(parameters);
 
@@ -567,84 +572,83 @@ async function addRule(rule, parameters) {
             */
 
             // TODO: Throw error if @import is referencing a local file (Ex: file://C:/...)
+            let filepath = parameters.replace(/[\"\']/g, "").split("/");
+            if (RST_SETTINGS.rules.import.underscorePrefix)
+                filepath[filepath.length - 1] = "_" + filepath[filepath.length - 1];
+            if (!filepath[filepath.length - 1].includes(".") && RST_SETTINGS.rules.import.assumeScss)
+                filepath[filepath.length - 1] = filepath[filepath.length - 1] + ".scss";
 
-            let importFiles = parameters.split(",");
-            for (let i = 0; i < importFiles.length; i++) {
-                let file = importFiles[i].replace(/[\"\']/g, "");
-                if (RST_SETTINGS.rules.import.underscorePrefix) file = "_" + file; // !: Bug in case file is in a folder
+            let filename = filepath[filepath.length - 1];
+            if (filepath[filepath.length - 1].toLowerCase().endsWith(".scss")) {
+                if (RST_SETTINGS.rules.import.enableSassImports) {
+                    // Fetch the file
+                    try {
+                        const response = await fetch(context + filepath.join("/"));
+                        let responseText = await response.text();
+                        
+                        if (responseText) {
 
-                if (!file.includes(".") && RST_SETTINGS.rules.import.assumeScss) {
-                    file += ".scss";
-                }
+                            if (RST_SETTINGS.debugging.debug) console.log("Importing and transpiling: " + filename);
 
+                            // Transpile response
 
-                if (file.toLowerCase().endsWith(".scss")) {
-                    if (RST_SETTINGS.rules.import.enableSassImports) {
-                        // Fetch the file
-                        try {
-                            const response = await fetch(file);
-                            let responseText = await response.text();
+                            const SOURCE = responseText + T_NEWLINE; // SINGLE INPUT
+                            const TOKENS = lex(SOURCE); // LEXER
+                            console.log(TOKENS);
+                            const AST = parse(TOKENS); // PARSER
+                            console.log(AST);
                             
-                            if (responseText) {
+                            let HREF_DIR = filepath.splice(0, filepath.length - 1).join("/") + "/";
+                            const RESULT = await transpile(AST, null, context + HREF_DIR);
+                            let content = RESULT.css; // TRANSPILER
 
-                                if (RST_SETTINGS.debugging.debug) console.log("Importing and transpiling: " + file);
+                            if (RST_SETTINGS.rules.import.showImportFileHeaders) {
+                                let commentStart = "/*";
+                                if (!RST_SETTINGS.output.minify) commentStart += " ";
+                                commentStart += "START OF IMPORTED FILE: " + filename;
+                                if (!RST_SETTINGS.output.minify) commentStart += " ";
+                                commentStart += "*/";
+                                if (!RST_SETTINGS.output.minify) commentStart += "\n";
 
-                                // Transpile response
+                                let commentEnd = "/*";
+                                if (!RST_SETTINGS.output.minify) commentEnd += " ";
+                                commentEnd += "END OF IMPORTED FILE: " + filename;
+                                if (!RST_SETTINGS.output.minify) commentEnd += " ";
+                                commentEnd += "*/";
+                                if (!RST_SETTINGS.output.minify) commentEnd += "\n";
 
-                                const SOURCE = responseText + T_NEWLINE; // SINGLE INPUT
-                                const TOKENS = lex(SOURCE); // LEXER
-                                const AST = parse(TOKENS); // PARSER
-                                const RESULT = await transpile(AST);
-                                let content = RESULT.css; // TRANSPILER
-
-                                if (RST_SETTINGS.rules.import.showImportFileHeaders) {
-                                    let commentStart = "/*";
-                                    if (!RST_SETTINGS.output.minify) commentStart += " ";
-                                    commentStart += "START OF IMPORTED FILE: " + file;
-                                    if (!RST_SETTINGS.output.minify) commentStart += " ";
-                                    commentStart += "*/";
-                                    if (!RST_SETTINGS.output.minify) commentStart += "\n";
-
-                                    let commentEnd = "/*";
-                                    if (!RST_SETTINGS.output.minify) commentEnd += " ";
-                                    commentEnd += "END OF IMPORTED FILE: " + file;
-                                    if (!RST_SETTINGS.output.minify) commentEnd += " ";
-                                    commentEnd += "*/";
-                                    if (!RST_SETTINGS.output.minify) commentEnd += "\n";
-
-                                    content = commentStart + content + commentEnd;
-                                }
-
-                                // Inject or append the transpiled response
-
-                                if (RST_SETTINGS.rules.import.documentInjection) {
-                                    // Inject content in CSS
-                                    CSS += content;
-                                    if (RST_SETTINGS.debugging.debug) console.log("Injected file to document");
-                                } else {
-                                    // Create new <style> with content
-                                    let styleElement = document.createElement("style");
-                                    styleElement.textContent = content;
-                                    document.body.appendChild(styleElement);
-                                    if (RST_SETTINGS.debugging.debug) console.log("Appended file to document");
-                                }
-                            } else {
-                                generalError("Import Sass", "Failed to load content: unkown error...");
-                                CSS += rule + " " + parameters + ";";
+                                content = commentStart + content + commentEnd;
                             }
 
-                        } catch (error) {
-                            generalError("Import Sass", "Failed to load content: " + error);
+                            // Inject or append the transpiled response
+
+                            if (RST_SETTINGS.rules.import.documentInjection) {
+                                // Inject content in CSS
+                                CSS += content;
+                                if (RST_SETTINGS.debugging.debug) console.log("Injected file to document");
+                            } else {
+                                // Create new <style> with content
+                                let styleElement = document.createElement("style");
+                                styleElement.textContent = content;
+                                document.body.appendChild(styleElement);
+                                if (RST_SETTINGS.debugging.debug) console.log("Appended file to document");
+                            }
+                        } else {
+                            generalError("Import Sass", "Failed to load content: unkown error...");
                             CSS += rule + " " + parameters + ";";
                         }
-                        
-                    } else {
-                        generalError("Import Sass", "The rule for importion of .scss files is disabled.");
+
+                    } catch (error) {
+                        generalError("Import Sass", "Failed to load content: " + error);
                         CSS += rule + " " + parameters + ";";
                     }
+                    
                 } else {
+                    generalError("Import Sass", "The rule for importion of .scss files is disabled.");
                     CSS += rule + " " + parameters + ";";
                 }
+            } else {
+                CSS += rule + " " + parameters + ";";
             }
             break;
 
@@ -810,7 +814,15 @@ let RST_SETTINGS = {
         removeEmptyDeclarations: false  // Removes redundant/empty declarations
     },
     debugging: {
-        debug: false,
+        debug: true,
         shortErrorMsgs: false
     }
 }
+
+
+
+/*
+ * Minify main.js using:
+ * 
+ * uglifyjs main.js --compress --mangle --output min.js
+*/
